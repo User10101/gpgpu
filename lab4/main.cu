@@ -4,44 +4,31 @@
 
 #define BLOCK_SIZE 16
 
-#define MULTIPLY 0
-#define MULTIPLY_TRANSPOSE 1
-
-__global__ void transpose(float *in, float *out, int m, int n)
+__global__ void gMultiply(float *a, float *b, float *c, int m, int n, int k)
 {
-  int i = threadIdx.x + blockIdx.x*blockDim.x;
-  int j = threadIdx.y + blockIdx.y*blockDim.y;
+  int aBegin = n * BLOCK_SIZE * blockIdx.y;
+  int aEnd = aBegin + n - 1;
+  int aStep = BLOCK_SIZE;
 
-  int arrayInIndex = j + i*n;
-  int arrayOutIndex = i + j*m;
+  int bBegin = BLOCK_SIZE * blockIdx.x;
+  int bStep = BLOCK_SIZE * k;
+  float sum = .0f;
 
-  out[arrayOutIndex] = in[arrayInIndex];
-}
+  for (int ia = aBegin, ib = bBegin; ia < aEnd; ia += aStep, ib += bStep) {
+    __shared__ float aSub[BLOCK_SIZE][BLOCK_SIZE];
+    __shared__ float bSub[BLOCK_SIZE][BLOCK_SIZE];
 
-__global__ void multiply(float *a, float *b, float *c, int m, int n, int k)
-{
-  int i = threadIdx.x + blockIdx.x*blockDim.x;
-  int j = threadIdx.y + blockIdx.y*blockDim.y;
+    aSub[threadIdx.y][threadIdx.x] = a[ia + n*threadIdx.y + threadIdx.x];
+    bSub[threadIdx.y][threadIdx.x] = b[ib + k*threadIdx.y + threadIdx.x];
+    __syncthreads();
 
-  double sum = .0;
-  for (int s = 0; s < n; ++s) {
-    sum += a[i*n + s]*b[s*k + j];
+    for (int s = 0; s < BLOCK_SIZE; ++s) {
+      sum += aSub[threadIdx.y][s] * bSub[s][threadIdx.x];
+    }
+    __syncthreads();
   }
 
-  c[i*k + j] = sum;
-}
-
-__global__ void multiply_tr(float *a, float *b, float *c, int m, int n, int k)
-{
-  int i = threadIdx.x + blockIdx.x*blockDim.x;
-  int j = threadIdx.y + blockIdx.y*blockDim.y;
-
-  double sum = .0;
-  for (int s = 0; s < n; ++s) {
-    sum += a[i*n + s]*b[j*n + s];
-  }
-
-  c[i*k + j] = sum;
+  c[k*BLOCK_SIZE*blockIdx.y + threadIdx.y*k + blockIdx.x*BLOCK_SIZE + threadIdx.x] = sum;
 }
 
 void fillMatrixMult(float *a, float *b, int m, int n, int k)
@@ -60,16 +47,9 @@ void fillMatrixMult(float *a, float *b, int m, int n, int k)
 }
 
 int main(int argc, char *argv[])
-{
-  int mode = MULTIPLY;
-  if (argc > 1) {
-    mode = atoi(argv[1]);
-  }
-  
-  int m = BLOCK_SIZE*2;
-  int n = BLOCK_SIZE*3;
-  int k = BLOCK_SIZE*4;
-  float *a, *b, *c, *tb;
+{  
+  int m = BLOCK_SIZE*2, n = BLOCK_SIZE*3, k = BLOCK_SIZE*4;
+  float *a, *b, *c;
   float *da, *db, *dc;
   
   a = (float *)malloc(m*n*sizeof(float));
@@ -79,18 +59,13 @@ int main(int argc, char *argv[])
   cudaMalloc((void **)&da, m*n*sizeof(float));
   cudaMalloc((void **)&db, n*k*sizeof(float));
   cudaMalloc((void **)&dc, m*k*sizeof(float));
-  cudaMalloc((void **)&tb, n*k*sizeof(float));
   fillMatrixMult(a, b, m, n, k);
  
   cudaMemcpy(da, a, m*n*sizeof(float), cudaMemcpyHostToDevice);
   cudaMemcpy(db, b, n*k*sizeof(float), cudaMemcpyHostToDevice);
 
-  dim3 tDimGrid(n / BLOCK_SIZE, k / BLOCK_SIZE);
   dim3 dimGrid(m / BLOCK_SIZE, k / BLOCK_SIZE);
   dim3 dimBlock(BLOCK_SIZE, BLOCK_SIZE);
-
-  transpose<<<tDimGrid, dimBlock>>>(db, tb, n, k);
-  cudaDeviceSynchronize();
 
   cudaEvent_t start, stop;
   float elapsedTime;
@@ -98,14 +73,10 @@ int main(int argc, char *argv[])
   cudaEventCreate(&stop);
   
   cudaEventRecord(start, 0);
-  if (mode == MULTIPLY_TRANSPOSE) {
-    multiply_tr<<<dimGrid, dimBlock>>>(da, tb, dc, m, n, k);
-  } else {
-    multiply<<<dimGrid, dimBlock>>>(da, db, dc, m, n, k);
-  }
+  gMultiply<<<dimGrid, dimBlock>>>(da, db, dc, m, n, k);
   cudaEventRecord(stop, 0);
   cudaEventSynchronize(stop);
-
+ 
   cudaEventElapsedTime(&elapsedTime, start, stop);
   cudaMemcpy(c, dc, m*k*sizeof(float), cudaMemcpyDeviceToHost);
 
@@ -113,7 +84,7 @@ int main(int argc, char *argv[])
   for (int i = 0; i < m; ++i) {
     for (int j = 0; j < k; ++j) {
       printf("%g ", c[j + i*k]);
-    }
+    } 
     printf("\n");
   }
   
