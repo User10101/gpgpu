@@ -1,2 +1,2 @@
 all:
-	nvcc main.cu -o main
+	nvcc -I ../include main.cu -o main

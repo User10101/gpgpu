@@ -1,8 +1,4 @@
-#include <cuda.h>
-#include <stdio.h>
-#include <malloc.h>
-
-#define BLOCK_SIZE 16
+#include <auxf.h>
 
 __global__ void gMultiply(float *a, float *b, float *c, int m, int n, int k)
 {
@@ -31,24 +27,8 @@ __global__ void gMultiply(float *a, float *b, float *c, int m, int n, int k)
   c[k*BLOCK_SIZE*blockIdx.y + threadIdx.y*k + blockIdx.x*BLOCK_SIZE + threadIdx.x] = sum;
 }
 
-void fillMatrixMult(float *a, float *b, int m, int n, int k)
-{
-  for (int i = 0; i < m; ++i) {
-    for (int j = 0; j < n; ++j) {
-      a[j + i*n] = j*i;
-    }
-  }
-
-  for (int i = 0; i < k; ++i) {
-    for (int j = 0; j < n; ++j) {
-      b[j + i*k] = (i == j) ? 1 : 0;
-    }
-  }
-}
-
 int main(int argc, char *argv[])
 {  
-  int m = BLOCK_SIZE*2, n = BLOCK_SIZE*3, k = BLOCK_SIZE*4;
   float *a, *b, *c;
   float *da, *db, *dc;
   
@@ -81,12 +61,12 @@ int main(int argc, char *argv[])
   cudaMemcpy(c, dc, m*k*sizeof(float), cudaMemcpyDeviceToHost);
 
   printf("Elapsed: %g\n", elapsedTime);
-  for (int i = 0; i < m; ++i) {
-    for (int j = 0; j < k; ++j) {
-      printf("%g ", c[j + i*k]);
-    } 
-    printf("\n");
-  }
-  
+  // printMatrix(a, m, n);
+  // printf("\n");
+  // printMatrix(b, n, k);
+  // printf("\n");
+  // printMatrix(c, m, k);
+
+  checkResult(c, m, k);
   return 0;
 }
