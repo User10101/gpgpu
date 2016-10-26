@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <math.h>
 #include <cuda.h>
+#include <getopt.h>
 
 #define M_PI 3.14159265358979323846
 #define COEF 48
@@ -24,7 +25,38 @@ __constant__ Vertex vert[VERTCOUNT];
 texture<float, 3, cudaReadModeElementType> df_tex;
 cudaArray* df_Array = 0;
 
-__global__ void kernel(float *a)
+__device__ float interpolation(float *arr_f, int x_size, int y_size, int z_size, float x, float y, float z)
+{
+  int vx, vy, vz;
+  int left_c = x;
+  int right_c = ceilf(x);
+  if (left_c >= FGSIZE) {
+    vx = FGSIZE - 1;
+  } else {
+    vx = ((right_c < FGSIZE) && ((x - left_c) > 0.5)) ? right_c : left_c;
+  }
+
+  left_c = y;
+  right_c = ceilf(y);
+  if (left_c >= FGSIZE) {
+    vy = FGSIZE - 1;
+  } else {
+    vy = ((right_c < FGSIZE) && ((y - left_c) > 0.5)) ? right_c : left_c;
+  }
+
+  left_c = z;
+  right_c = ceilf(z);
+  if (left_c >= FGSIZE) {
+    vz = FGSIZE - 1;
+  } else {
+    vz = ((right_c < FGSIZE) && ((z - left_c) > 0.5)) ? right_c : left_c;
+  }
+
+  //printf("%f %d %d %d\n", arr_f[z_size * (vx * y_size + vy) + vz], vx, vy, vz);
+  return arr_f[z_size * (vx * y_size + vy) + vz];
+}
+
+__global__ void kernel(float *a, float *df, bool use_texture = true)
 {
   __shared__ float cache[THREADSPERBLOCK];
   int tid = threadIdx.x + blockIdx.x * blockDim.x;
@@ -33,13 +65,48 @@ __global__ void kernel(float *a)
   float x = vert[tid].x + FGSHIFT + 0.5f;
   float y = vert[tid].y + FGSHIFT + 0.5f;
   float z = vert[tid].z + FGSHIFT + 0.5f;
-  cache[cacheIndex] = tex3D(df_tex, z, y, x);
+  
+  if (use_texture) {
+    cache[cacheIndex] = tex3D(df_tex, z, y, x);
+  } else {
+    cache[cacheIndex] = interpolation(df, FGSIZE, FGSIZE, FGSIZE, x, y, z);
+  }
 
   __syncthreads();
   for (int s = blockDim.x / 2; s > 0; s >>= 1)
     {
-      if (cacheIndex < s)
+      if (cacheIndex < s) {
 	cache[cacheIndex] += cache[cacheIndex + s];
+      }
+      __syncthreads();
+    }
+
+  if (cacheIndex == 0)
+    a[blockIdx.x] = cache[0];
+}
+
+__global__ void kernel(float *a, Vertex *gvert, float *df, bool use_texture = true)
+{
+  __shared__ float cache[THREADSPERBLOCK];
+  int tid = threadIdx.x + blockIdx.x * blockDim.x;
+  int cacheIndex = threadIdx.x;
+	
+  float x = gvert[tid].x + FGSHIFT + 0.5f;
+  float y = gvert[tid].y + FGSHIFT + 0.5f;
+  float z = gvert[tid].z + FGSHIFT + 0.5f;
+
+  if (use_texture) {
+    cache[cacheIndex] = tex3D(df_tex, z, y, x);
+  } else {
+    cache[cacheIndex] = interpolation(df, FGSIZE, FGSIZE, FGSIZE, x, y, z);
+  }
+
+  __syncthreads();
+  for (int s = blockDim.x / 2; s > 0; s >>= 1)
+    {
+      if (cacheIndex < s) {
+	cache[cacheIndex] += cache[cacheIndex + s];	
+      }
       __syncthreads();
     }
 
@@ -56,8 +123,9 @@ void calc_f(float *arr_f, int x_size, int y_size, int z_size, ptr_f f)
 {
   for (int x = 0; x < x_size; ++x)
     for (int y = 0; y < y_size; ++y)
-      for (int z = 0; z < z_size; ++z)
+      for (int z = 0; z < z_size; ++z) {
 	arr_f[z_size * (x * y_size + y) + z] = f(x - FGSHIFT, y - FGSHIFT, z - FGSHIFT);
+      }
 }
 
 float check(Vertex *v, ptr_f f)
@@ -89,6 +157,26 @@ void init_vertexes()
   free(temp_vert);
 }
 
+void init_vertexes(Vertex *dev_vert)
+{
+  Vertex *temp_vert = (Vertex *)malloc(sizeof(Vertex) * VERTCOUNT);
+  int i = 0;
+  for (int iphi = 0; iphi < 2 * COEF; ++iphi)
+    {	
+      for (int ipsi = 0; ipsi < COEF; ++ipsi, ++i)
+	{
+	  float phi = iphi * M_PI / COEF;
+	  float psi = ipsi * M_PI / COEF;
+	  temp_vert[i].x = RADIUS * sinf(psi) * cosf(phi);
+	  temp_vert[i].y = RADIUS * sinf(psi) * sinf(phi);
+	  temp_vert[i].z = RADIUS * cosf(psi);
+	}
+    }
+  printf("sumcheck = %f\n", check(temp_vert, &func)*M_PI*M_PI/ COEF/COEF);
+  cudaMemcpy(dev_vert, temp_vert, VERTCOUNT * sizeof(Vertex), cudaMemcpyHostToDevice);
+  free(temp_vert);
+}
+
 void init_texture(float *df_h)
 {
   const cudaExtent volumeSize = make_cudaExtent(FGSIZE, FGSIZE, FGSIZE);
@@ -114,12 +202,38 @@ void release_texture()
   cudaFreeArray(df_Array);
 }
 
-int main(void)
+int main(int argc, char *argv[])
 {
-  init_vertexes();
+  bool use_cmemory = false, use_texture = false;
+
+  char *optstr = "ct";
+  int opt = getopt(argc, argv, optstr);
+  while (opt != -1) {
+    switch (opt) {
+    case 'c':
+      use_cmemory = true;
+      break;
+    case 't':
+      use_texture = true;
+      break;
+    }
+    opt = getopt(argc, argv, optstr);
+  }
+  
+  Vertex *gvert;
+  if (use_cmemory) {
+    init_vertexes();
+  } else {
+    cudaMalloc((void **)&gvert, VERTCOUNT * sizeof(Vertex));
+    init_vertexes(gvert);
+  }
 
   float *arr = (float *)malloc(sizeof(float) * FGSIZE * FGSIZE * FGSIZE);
   calc_f(arr, FGSIZE, FGSIZE, FGSIZE, &func);
+
+  // for (size_t i = 0; i < FGSIZE; ++i) {
+  //   printf("%f ", arr[FGSIZE * (i * FGSIZE + 1) + 1]);
+  // }
   init_texture(arr);
 
   float *sum = (float*)malloc(sizeof(float) * BLOCKSPERGRID);
@@ -129,9 +243,19 @@ int main(void)
   cudaEvent_t start, stop;
   cudaEventCreate(&start);
   cudaEventCreate(&stop);
-  cudaEventRecord(start, 0);	
+  cudaEventRecord(start, 0);
 
-  kernel<<<BLOCKSPERGRID,THREADSPERBLOCK>>>(sum_dev);
+  float *darr;
+  if (!use_texture) {
+    cudaMalloc((void **)&darr, sizeof(float) * FGSIZE * FGSIZE * FGSIZE);
+    cudaMemcpy(darr, arr, sizeof(float) * FGSIZE * FGSIZE * FGSIZE, cudaMemcpyHostToDevice);
+  }
+
+  if (use_cmemory) {
+    kernel<<<BLOCKSPERGRID,THREADSPERBLOCK>>>(sum_dev, darr, use_texture);
+  } else {
+    kernel<<<BLOCKSPERGRID,THREADSPERBLOCK>>>(sum_dev, gvert, darr, use_texture);
+  }
 
   cudaMemcpy(sum, sum_dev, sizeof(float) * BLOCKSPERGRID, cudaMemcpyDeviceToHost);
   float s = 0.0f;
@@ -148,6 +272,12 @@ int main(void)
   cudaEventDestroy(stop);
 
   cudaFree(sum_dev);
+  if (!use_cmemory) {
+    cudaFree(gvert);
+  }
+  if (!use_texture) {
+    cudaFree(darr);
+  }
   free(sum);
   release_texture();
   free(arr);
