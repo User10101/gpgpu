@@ -25,11 +25,87 @@ __constant__ Vertex vert[VERTCOUNT];
 texture<float, 3, cudaReadModeElementType> df_tex;
 cudaArray* df_Array = 0;
 
+__device__ float interpolation_pl(float *arr_f, int x_size, int y_size, int z_size, float x, float y, float z)
+{
+  int interp = 1;
+  int vx, vy, vz;
+  int vx0, vy0, vz0, vx1, vy1, vz1;
+  vx0 = x;
+  vx1 = vx0 + 1;
+  float x0 = ((float)((int)x)) - FGSHIFT;
+  float x1 = x0 + 1.f;
+  if (vx1 >= FGSIZE) {
+    interp = 0;
+    vx = FGSIZE - 1;
+  } else {
+    vx = ((vx1 < FGSIZE) && ((x - vx0) > 0.5)) ? vx1 : vx0;
+  }
+
+  vy0 = y;
+  vy1 = vy0 + 1;
+  float y0 = ((float)((int)y)) - FGSHIFT;
+  float y1 = y0 + 1.f;
+  if (vy1 >= FGSIZE) {
+    interp = 0;
+    vy = FGSIZE - 1;
+  } else {
+    vy = ((vy1 < FGSIZE) && ((y - vy0) > 0.5)) ? vy1 : vy0;
+  }
+
+  vz0 = z;
+  vz1 = vz0 + 1;
+  float z0 = ((float)((int)z)) - FGSHIFT;
+  float z1 = z0 + 1.f;
+  if (vz1 >= FGSIZE) {
+    interp = 0;
+    vz = FGSIZE - 1;
+  } else {
+    vz = ((vz1 < FGSIZE) && ((z - vz0) > 0.5)) ? vz1 : vz0;
+  }
+  
+  if (interp == 0) {
+    return arr_f[z_size * (vx * y_size + vy) + vz];
+  } else {
+    x -= FGSHIFT;
+    y -= FGSHIFT;
+    z -= FGSHIFT;
+    float inertp = ( 
+      arr_f[z_size * (vx0 * y_size + vy0) + vz0]*(x-x1)*(y-y1)*(z-z1)/(x0-x1)/(y0-y1)/(z0-z1)
+      + arr_f[z_size * (vx1 * y_size + vy0) + vz0]*(x-x0)*(y-y1)*(z-z1)/(x1-x0)/(y0-y1)/(z0-z1)
+      + arr_f[z_size * (vx1 * y_size + vy0) + vz1]*(x-x0)*(y-y1)*(z-z0)/(x1-x0)/(y0-y1)/(z1-z0)
+      + arr_f[z_size * (vx1 * y_size + vy1) + vz0]*(x-x0)*(y-y0)*(z-z1)/(x1-x0)/(y1-y0)/(z0-z1)
+      + arr_f[z_size * (vx1 * y_size + vy1) + vz1]*(x-x0)*(y-y0)*(z-z0)/(x1-x0)/(y1-y0)/(z1-z0)
+      + arr_f[z_size * (vx0 * y_size + vy0) + vz1]*(x-x1)*(y-y1)*(z-z0)/(x0-x1)/(y0-y1)/(z1-z0)
+      + arr_f[z_size * (vx0 * y_size + vy1) + vz0]*(x-x1)*(y-y0)*(z-z1)/(x0-x1)/(y1-y0)/(z0-z1)
+      + arr_f[z_size * (vx0 * y_size + vy1) + vz1]*(x-x1)*(y-y0)*(z-z0)/(x0-x1)/(y1-y0)/(z1-z0));
+   printf("%g %g %g %g %g %g %g %g --- %g %g %g %g %g %g %g %g --- %g %g | %g %g %g | %g %g %g %g %g %g\n",
+   	  arr_f[z_size * (vx0 * y_size + vy0) + vz0],
+   	  arr_f[z_size * (vx1 * y_size + vy0) + vz0],
+   	  arr_f[z_size * (vx1 * y_size + vy0) + vz1],
+   	  arr_f[z_size * (vx1 * y_size + vy1) + vz0],
+   	  arr_f[z_size * (vx1 * y_size + vy1) + vz1],
+   	  arr_f[z_size * (vx0 * y_size + vy0) + vz1],
+   	  arr_f[z_size * (vx0 * y_size + vy1) + vz0],
+   	  arr_f[z_size * (vx0 * y_size + vy1) + vz1],	  
+   	  arr_f[z_size * (vx0 * y_size + vy0) + vz0]*(x-x1)*(y-y1)*(z-z1)/(x0-x1)/(y0-y1)/(z0-z1),
+   	  arr_f[z_size * (vx1 * y_size + vy0) + vz0]*(x-x0)*(y-y1)*(z-z1)/(x1-x0)/(y0-y1)/(z0-z1),
+   	  arr_f[z_size * (vx1 * y_size + vy0) + vz1]*(x-x0)*(y-y1)*(z-z0)/(x1-x0)/(y0-y1)/(z1-z0),
+   	  arr_f[z_size * (vx1 * y_size + vy1) + vz0]*(x-x0)*(y-y0)*(z-z1)/(x1-x0)/(y1-y0)/(z0-z1),
+   	  arr_f[z_size * (vx1 * y_size + vy1) + vz1]*(x-x0)*(y-y0)*(z-z0)/(x1-x0)/(y1-y0)/(z1-z0),
+   	  arr_f[z_size * (vx0 * y_size + vy0) + vz1]*(x-x1)*(y-y1)*(z-z0)/(x0-x1)/(y0-y1)/(z1-z0),
+   	  arr_f[z_size * (vx0 * y_size + vy1) + vz0]*(x-x1)*(y-y0)*(z-z1)/(x0-x1)/(y1-y0)/(z0-z1),
+   	  arr_f[z_size * (vx0 * y_size + vy1) + vz1]*(x-x1)*(y-y0)*(z-z0)/(x0-x1)/(y1-y0)/(z1-z0),
+   	  arr_f[z_size * (vx * y_size + vy) + vz],
+   	  interp, x, y, z, x0, x1, y0, y1, z0, z1);
+   return interp;
+  }
+}
+
 __device__ float interpolation(float *arr_f, int x_size, int y_size, int z_size, float x, float y, float z)
 {
   int vx, vy, vz;
   int left_c = x;
-  int right_c = ceilf(x);
+  int right_c = left_c + 1;
   if (left_c >= FGSIZE) {
     vx = FGSIZE - 1;
   } else {
@@ -37,7 +113,7 @@ __device__ float interpolation(float *arr_f, int x_size, int y_size, int z_size,
   }
 
   left_c = y;
-  right_c = ceilf(y);
+  right_c = left_c + 1;
   if (left_c >= FGSIZE) {
     vy = FGSIZE - 1;
   } else {
@@ -45,14 +121,13 @@ __device__ float interpolation(float *arr_f, int x_size, int y_size, int z_size,
   }
 
   left_c = z;
-  right_c = ceilf(z);
+  right_c = left_c + 1;
   if (left_c >= FGSIZE) {
     vz = FGSIZE - 1;
   } else {
     vz = ((right_c < FGSIZE) && ((z - left_c) > 0.5)) ? right_c : left_c;
   }
 
-  //printf("%f %d %d %d\n", arr_f[z_size * (vx * y_size + vy) + vz], vx, vy, vz);
   return arr_f[z_size * (vx * y_size + vy) + vz];
 }
 
@@ -98,7 +173,7 @@ __global__ void kernel(float *a, Vertex *gvert, float *df, bool use_texture = tr
   if (use_texture) {
     cache[cacheIndex] = tex3D(df_tex, z, y, x);
   } else {
-    cache[cacheIndex] = interpolation(df, FGSIZE, FGSIZE, FGSIZE, x, y, z);
+    cache[cacheIndex] = interpolation_pl(df, FGSIZE, FGSIZE, FGSIZE, x, y, z);
   }
 
   __syncthreads();
@@ -174,6 +249,7 @@ void init_vertexes(Vertex *dev_vert)
     }
   printf("sumcheck = %f\n", check(temp_vert, &func)*M_PI*M_PI/ COEF/COEF);
   cudaMemcpy(dev_vert, temp_vert, VERTCOUNT * sizeof(Vertex), cudaMemcpyHostToDevice);
+
   free(temp_vert);
 }
 
