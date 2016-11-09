@@ -69,35 +69,7 @@ __device__ float interpolation_pl(float *arr_f, int x_size, int y_size, int z_si
     x -= FGSHIFT;
     y -= FGSHIFT;
     z -= FGSHIFT;
-    float inertp = ( 
-      arr_f[z_size * (vx0 * y_size + vy0) + vz0]*(x-x1)*(y-y1)*(z-z1)/(x0-x1)/(y0-y1)/(z0-z1)
-      + arr_f[z_size * (vx1 * y_size + vy0) + vz0]*(x-x0)*(y-y1)*(z-z1)/(x1-x0)/(y0-y1)/(z0-z1)
-      + arr_f[z_size * (vx1 * y_size + vy0) + vz1]*(x-x0)*(y-y1)*(z-z0)/(x1-x0)/(y0-y1)/(z1-z0)
-      + arr_f[z_size * (vx1 * y_size + vy1) + vz0]*(x-x0)*(y-y0)*(z-z1)/(x1-x0)/(y1-y0)/(z0-z1)
-      + arr_f[z_size * (vx1 * y_size + vy1) + vz1]*(x-x0)*(y-y0)*(z-z0)/(x1-x0)/(y1-y0)/(z1-z0)
-      + arr_f[z_size * (vx0 * y_size + vy0) + vz1]*(x-x1)*(y-y1)*(z-z0)/(x0-x1)/(y0-y1)/(z1-z0)
-      + arr_f[z_size * (vx0 * y_size + vy1) + vz0]*(x-x1)*(y-y0)*(z-z1)/(x0-x1)/(y1-y0)/(z0-z1)
-      + arr_f[z_size * (vx0 * y_size + vy1) + vz1]*(x-x1)*(y-y0)*(z-z0)/(x0-x1)/(y1-y0)/(z1-z0));
-   printf("%g %g %g %g %g %g %g %g --- %g %g %g %g %g %g %g %g --- %g %g | %g %g %g | %g %g %g %g %g %g\n",
-   	  arr_f[z_size * (vx0 * y_size + vy0) + vz0],
-   	  arr_f[z_size * (vx1 * y_size + vy0) + vz0],
-   	  arr_f[z_size * (vx1 * y_size + vy0) + vz1],
-   	  arr_f[z_size * (vx1 * y_size + vy1) + vz0],
-   	  arr_f[z_size * (vx1 * y_size + vy1) + vz1],
-   	  arr_f[z_size * (vx0 * y_size + vy0) + vz1],
-   	  arr_f[z_size * (vx0 * y_size + vy1) + vz0],
-   	  arr_f[z_size * (vx0 * y_size + vy1) + vz1],	  
-   	  arr_f[z_size * (vx0 * y_size + vy0) + vz0]*(x-x1)*(y-y1)*(z-z1)/(x0-x1)/(y0-y1)/(z0-z1),
-   	  arr_f[z_size * (vx1 * y_size + vy0) + vz0]*(x-x0)*(y-y1)*(z-z1)/(x1-x0)/(y0-y1)/(z0-z1),
-   	  arr_f[z_size * (vx1 * y_size + vy0) + vz1]*(x-x0)*(y-y1)*(z-z0)/(x1-x0)/(y0-y1)/(z1-z0),
-   	  arr_f[z_size * (vx1 * y_size + vy1) + vz0]*(x-x0)*(y-y0)*(z-z1)/(x1-x0)/(y1-y0)/(z0-z1),
-   	  arr_f[z_size * (vx1 * y_size + vy1) + vz1]*(x-x0)*(y-y0)*(z-z0)/(x1-x0)/(y1-y0)/(z1-z0),
-   	  arr_f[z_size * (vx0 * y_size + vy0) + vz1]*(x-x1)*(y-y1)*(z-z0)/(x0-x1)/(y0-y1)/(z1-z0),
-   	  arr_f[z_size * (vx0 * y_size + vy1) + vz0]*(x-x1)*(y-y0)*(z-z1)/(x0-x1)/(y1-y0)/(z0-z1),
-   	  arr_f[z_size * (vx0 * y_size + vy1) + vz1]*(x-x1)*(y-y0)*(z-z0)/(x0-x1)/(y1-y0)/(z1-z0),
-   	  arr_f[z_size * (vx * y_size + vy) + vz],
-   	  interp, x, y, z, x0, x1, y0, y1, z0, z1);
-   return interp;
+    return arr_f[z_size * (vx0 * y_size + vy0) + vz0]*(x-x1)*(y-y1)*(z-z1)/(x0-x1)/(y0-y1)/(z0-z1) + arr_f[z_size * (vx1 * y_size + vy0) + vz0]*(x-x0)*(y-y1)*(z-z1)/(x1-x0)/(y0-y1)/(z0-z1) + arr_f[z_size * (vx1 * y_size + vy0) + vz1]*(x-x0)*(y-y1)*(z-z0)/(x1-x0)/(y0-y1)/(z1-z0) + arr_f[z_size * (vx1 * y_size + vy1) + vz0]*(x-x0)*(y-y0)*(z-z1)/(x1-x0)/(y1-y0)/(z0-z1) + arr_f[z_size * (vx1 * y_size + vy1) + vz1]*(x-x0)*(y-y0)*(z-z0)/(x1-x0)/(y1-y0)/(z1-z0) + arr_f[z_size * (vx0 * y_size + vy0) + vz1]*(x-x1)*(y-y1)*(z-z0)/(x0-x1)/(y0-y1)/(z1-z0) + arr_f[z_size * (vx0 * y_size + vy1) + vz0]*(x-x1)*(y-y0)*(z-z1)/(x0-x1)/(y1-y0)/(z0-z1) + arr_f[z_size * (vx0 * y_size + vy1) + vz1]*(x-x1)*(y-y0)*(z-z0)/(x0-x1)/(y1-y0)/(z1-z0);
   }
 }
 
@@ -131,7 +103,7 @@ __device__ float interpolation(float *arr_f, int x_size, int y_size, int z_size,
   return arr_f[z_size * (vx * y_size + vy) + vz];
 }
 
-__global__ void kernel(float *a, float *df, bool use_texture = true)
+__global__ void kernel(float *a, float *df, bool linear_interpolation = true, bool use_texture = true)
 {
   __shared__ float cache[THREADSPERBLOCK];
   int tid = threadIdx.x + blockIdx.x * blockDim.x;
@@ -144,7 +116,11 @@ __global__ void kernel(float *a, float *df, bool use_texture = true)
   if (use_texture) {
     cache[cacheIndex] = tex3D(df_tex, z, y, x);
   } else {
-    cache[cacheIndex] = interpolation(df, FGSIZE, FGSIZE, FGSIZE, x, y, z);
+    if (linear_interpolation) {
+      cache[cacheIndex] = interpolation_pl(df, FGSIZE, FGSIZE, FGSIZE, x, y, z);
+    } else {
+      cache[cacheIndex] = interpolation(df, FGSIZE, FGSIZE, FGSIZE, x, y, z);
+    }
   }
 
   __syncthreads();
@@ -160,7 +136,7 @@ __global__ void kernel(float *a, float *df, bool use_texture = true)
     a[blockIdx.x] = cache[0];
 }
 
-__global__ void kernel(float *a, Vertex *gvert, float *df, bool use_texture = true)
+__global__ void kernel(float *a, Vertex *gvert, float *df, bool linear_interpolation = true, bool use_texture = true)
 {
   __shared__ float cache[THREADSPERBLOCK];
   int tid = threadIdx.x + blockIdx.x * blockDim.x;
@@ -173,7 +149,11 @@ __global__ void kernel(float *a, Vertex *gvert, float *df, bool use_texture = tr
   if (use_texture) {
     cache[cacheIndex] = tex3D(df_tex, z, y, x);
   } else {
-    cache[cacheIndex] = interpolation_pl(df, FGSIZE, FGSIZE, FGSIZE, x, y, z);
+    if (linear_interpolation) {
+      cache[cacheIndex] = interpolation_pl(df, FGSIZE, FGSIZE, FGSIZE, x, y, z);
+    } else {
+      cache[cacheIndex] = interpolation(df, FGSIZE, FGSIZE, FGSIZE, x, y, z);
+    }
   }
 
   __syncthreads();
@@ -280,9 +260,9 @@ void release_texture()
 
 int main(int argc, char *argv[])
 {
-  bool use_cmemory = false, use_texture = false;
+  bool use_cmemory = false, use_texture = false, linear_interpolation = false;
 
-  char *optstr = "ct";
+  char *optstr = "ctl";
   int opt = getopt(argc, argv, optstr);
   while (opt != -1) {
     switch (opt) {
@@ -291,6 +271,9 @@ int main(int argc, char *argv[])
       break;
     case 't':
       use_texture = true;
+      break;
+    case 'l':
+      linear_interpolation = true;
       break;
     }
     opt = getopt(argc, argv, optstr);
@@ -328,9 +311,9 @@ int main(int argc, char *argv[])
   }
 
   if (use_cmemory) {
-    kernel<<<BLOCKSPERGRID,THREADSPERBLOCK>>>(sum_dev, darr, use_texture);
+    kernel<<<BLOCKSPERGRID,THREADSPERBLOCK>>>(sum_dev, darr, linear_interpolation, use_texture);
   } else {
-    kernel<<<BLOCKSPERGRID,THREADSPERBLOCK>>>(sum_dev, gvert, darr, use_texture);
+    kernel<<<BLOCKSPERGRID,THREADSPERBLOCK>>>(sum_dev, gvert, darr, linear_interpolation, use_texture);
   }
 
   cudaMemcpy(sum, sum_dev, sizeof(float) * BLOCKSPERGRID, cudaMemcpyDeviceToHost);
